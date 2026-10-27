@@ -83,7 +83,10 @@
 
   // ------------------------------------------------------------------ parties en ligne
   async function rpc(fn, args) {
-    const r = await fetch(SB_URL + '/rest/v1/rpc/' + fn, { method: 'POST', headers: { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY, 'Content-Type': 'application/json' }, body: JSON.stringify(args) });
+    const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 8000);   // une requête bloquée ne doit pas figer la synchro
+    let r;
+    try { r = await fetch(SB_URL + '/rest/v1/rpc/' + fn, { method: 'POST', signal: ctl.signal, headers: { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY, 'Content-Type': 'application/json' }, body: JSON.stringify(args) }); }
+    finally { clearTimeout(timer); }
     if (!r.ok) throw new Error(await r.text());
     const t = await r.text();
     return t ? JSON.parse(t) : null;
@@ -116,14 +119,15 @@
     game = { mode: 'online', me: camp || OTHER(creator), code, creator, version: -1, st: row.game.st, staged: { W: {}, E: {} }, done: { W: false, E: false }, history: [], last: null, sub: {} };
     adopt(row); game.sub = row.submitted || {}; recomputeDone(); save(); render();
   }
-  let resolving = false, polling = false;
+  let resolving = false, polling = false, pollStart = 0;
   async function pull() {
-    if (!game || game.mode !== 'online' || polling || resolving) return;
-    polling = true;
+    if (!game || game.mode !== 'online') return;
+    if ((polling || resolving) && Date.now() - pollStart < 20000) return;
+    polling = true; resolving = false; pollStart = Date.now();
     try {
       const rows = await rpc('dip_get', { p_code: game.code });
       if (!rows || !rows.length) { game.net = 'Partie introuvable.'; render(); return; }
-      const row = rows[0]; let changed = !!game.net; game.net = null;
+      const row = rows[0]; let changed = !!game.net; game.net = null; lastSync = Date.now();
       if (row.version !== game.version) { adopt(row); changed = true; }
       const sub = row.submitted || {};
       if (JSON.stringify(sub) !== JSON.stringify(game.sub || {})) { game.sub = sub; changed = true; }
@@ -140,7 +144,9 @@
     } catch (e) { if (!game.net) { game.net = 'Connexion perdue, nouvelle tentative…'; render(); } }
     finally { polling = false; }
   }
+  let lastSync = 0;
   setInterval(pull, 3000);
+  setInterval(() => { const e = document.getElementById('syncage'); if (e && lastSync) { const n = Math.round((Date.now() - lastSync) / 1000); e.textContent = n <= 1 ? 'vérifié à l\'instant' : 'vérifié il y a ' + n + ' s'; } }, 1000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) pull(); });
   window.addEventListener('focus', () => pull());
   window.addEventListener('online', () => pull());
@@ -631,7 +637,7 @@
     return `<div class="card"><h3>Partie en ligne · code ${game.code}</h3>
       <div class="row"><span class="dot ${game.me}"></span><span>Vous jouez <b style="color:${P[game.me].color}">${P[game.me].long}</b></span></div>
       <div class="row" style="margin-top:8px"><button id="copylink">Copier le lien à envoyer</button></div>
-      <div id="netmsg" class="hint ${game.net || game.notice ? 'bad' : ''}" style="margin-top:6px">${game.net ? esc(game.net) : game.notice ? esc(game.notice) : 'Synchronisée : situation n°' + (game.version + 1) + ', identique pour les deux joueurs.'}</div></div>`;
+      <div id="netmsg" class="hint ${game.net || game.notice ? 'bad' : ''}" style="margin-top:6px">${game.net ? esc(game.net) : game.notice ? esc(game.notice) : 'Synchronisée : situation n°' + (game.version + 1) + ', identique pour les deux joueurs.'} <span id="syncage"></span></div></div>`;
   }
   function waitHTML(cur) {
     const opp = OTHER(cur), s = st();
