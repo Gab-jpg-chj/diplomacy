@@ -724,7 +724,7 @@
   function drawDynamicSafe() { try { gDyn.innerHTML = ''; } catch (e) { /* */ } }
   function showRules() {
     const m = modal(`<h2>Règles</h2>
-      <h4>But</h4><p>Posséder plus de la moitié des centres de ravitaillement (cercles et étoiles sur la carte). Un centre appartient à celui qui l'occupe à la fin de l'automne.</p>
+      <h4>But</h4><p>Posséder <b>plus de la moitié de tous les centres de ravitaillement de la carte</b> (cercles et étoiles) : ${Math.floor(G.centers.length / 2) + 1} centres sur ${G.centers.length}, y compris les centres neutres. Un centre appartient à celui qui l'occupe à la fin de l'automne.</p>
       <h4>Tours</h4><p>Chaque année : <b>Printemps</b> (ordres, retraites) puis <b>Automne</b> (ordres, retraites) puis <b>Ajustements</b> (construire ou dissoudre selon le nombre de centres). Les deux joueurs donnent leurs ordres en secret, puis tout est résolu en même temps.</p>
       <h4>Unités</h4><p>Une <b>armée</b> (A) circule sur les terres, une <b>flotte</b> (F) sur les mers et sur les côtes. Une seule unité par province.</p>
       <h4>Ordres</h4><ul><li><b>Tenir</b> : rester sur place.</li><li><b>Aller</b> : se déplacer vers une province voisine.</li><li><b>Soutenir</b> : ajouter +1 à l'attaque ou à la défense d'une unité voisine de la province visée. Un soutien est coupé si l'unité qui soutient est attaquée (sauf par celle visée par le soutien) ou délogée.</li><li><b>Convoyer</b> : une flotte en mer transporte une armée côtière d'une côte à l'autre. Une chaîne de flottes peut convoyer. Si une flotte du convoi est délogée, le convoi échoue.</li></ul>
