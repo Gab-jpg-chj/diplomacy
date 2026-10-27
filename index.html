@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Diplomacy — Guerre froide</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header>
+  <h1>Diplomacy <span>Guerre froide</span></h1>
+  <div id="phase"></div>
+  <div class="hbtns">
+    <button id="btn-rules" class="ghost">Règles</button>
+    <button id="btn-new" class="ghost">Nouvelle partie</button>
+  </div>
+</header>
+<main>
+  <section id="mapwrap">
+    <svg id="map" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet"></svg>
+    <div id="zoom">
+      <button id="z-in" title="Zoom +">+</button>
+      <button id="z-out" title="Zoom −">−</button>
+      <button id="z-reset" title="Vue d'ensemble">⤢</button>
+    </div>
+    <div id="hover"></div>
+  </section>
+  <aside id="panel"></aside>
+</main>
+<div id="modal" class="hidden"></div>
+<script src="js/maskdata.js"></script>
+<script src="js/mapdef.js"></script>
+<script src="js/mapgen.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
