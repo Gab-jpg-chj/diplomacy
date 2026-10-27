@@ -4,7 +4,8 @@
   const MAP = buildMap();
   const G = Dip.makeGraph(MAP);
   const RG = id => MAP.byId[id];
-  const SAVE_KEY = 'diplomacy-guerre-froide-v1';
+  const SAVE_KEY = 'diplomacy-guerre-froide-v1';          // ancienne sauvegarde (une seule partie)
+  const STORE_KEY = 'diplomacy-games-v2', CUR_KEY = 'diplomacy-current-v2';
   const SVGNS = 'http://www.w3.org/2000/svg';
   const $ = s => document.querySelector(s);
   const P = PLAYERS;
@@ -17,10 +18,24 @@
   const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNxb2xldXFjb2N0b2tsa2NpdXJwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI1MDEzMjUsImV4cCI6MjEwODA3NzMyNX0.t8McL0xEAfDhzv1LFLq6gLAL4L4YYUaYpRc0FdLh_jg';
 
   // ------------------------------------------------------------------ sauvegarde
-  function save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(game)); } catch (e) { /* ignore */ } }
-  function load() { try { const s = localStorage.getItem(SAVE_KEY); return s ? JSON.parse(s) : null; } catch (e) { return null; } }
-  function newGame(mode, me) {
-    game = { mode, me: me || null, st: Dip.initialState(G, START_UNITS, 1950), staged: { W: {}, E: {} }, done: { W: false, E: false }, history: [], last: null };
+  const newId = () => 'g' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  function readStore() {
+    try {
+      const raw = localStorage.getItem(STORE_KEY);
+      if (raw) return JSON.parse(raw) || {};
+      const old = localStorage.getItem(SAVE_KEY);           // migration de l'ancienne sauvegarde
+      if (old) { const g = JSON.parse(old); if (g && g.st) { g.id = newId(); g.name = g.name || 'Ma partie'; g.updated = Date.now(); const s = { [g.id]: g }; localStorage.setItem(STORE_KEY, JSON.stringify(s)); localStorage.setItem(CUR_KEY, g.id); return s; } }
+    } catch (e) { /* ignore */ }
+    return {};
+  }
+  function save() {
+    if (!game) return;
+    try { game.id = game.id || newId(); game.updated = Date.now(); const s = readStore(); s[game.id] = game; localStorage.setItem(STORE_KEY, JSON.stringify(s)); localStorage.setItem(CUR_KEY, game.id); } catch (e) { /* ignore */ }
+  }
+  function load() { try { const s = readStore(), id = localStorage.getItem(CUR_KEY); return (id && s[id]) || null; } catch (e) { return null; } }
+  function gameName(mode, me, code) { return mode === 'online' ? 'Partie ' + code : 'Partie à deux'; }
+  function newGame(mode, me, name) {
+    game = { id: newId(), name: (name || '').trim() || 'Partie à deux', mode, me: me || null, st: Dip.initialState(G, START_UNITS, 1950), staged: { W: {}, E: {} }, done: { W: false, E: false }, history: [], last: null };
     ui.cur = null; ui.curtainOk = null; resetSel(); autoDone(); save(); render();
   }
   const resetSel = () => { ui.sel = null; ui.act = null; ui.step = 0; ui.pick = null; ui.coastAsk = null; ui.buildPick = null; ui.retSel = null; };
@@ -28,8 +43,8 @@
   // ------------------------------------------------------------------ phases
   const st = () => game.st;
   const phaseKey = () => st().year + st().season + st().phase;
-  function needsInput(p) {
-    const s = st();
+  function needsInput(p, s) {
+    s = s || st();
     if (s.phase === 'orders') return s.units.some(u => u.owner === p);
     if (s.phase === 'retreat') return s.retreats.some(d => d.unit.owner === p && d.options.length > 0);
     if (s.phase === 'build') { const b = Dip.buildStatus(G, s)[p]; return b.builds > 0 || b.disbands > 0; }
@@ -103,20 +118,22 @@
     const sub = game.sub || {};
     Dip.PLAYER_IDS.forEach(p => { game.done[p] = !needsInput(p) || !!(sub[p] && sub[p].k === phaseKey()); });
   }
-  async function createOnline(me) {
+  async function createOnline(me, name) {
     const chars = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; let code = '';
     for (let i = 0; i < 5; i++) code += chars[Math.floor(Math.random() * chars.length)];
     const st0 = Dip.initialState(G, START_UNITS, 1950);
-    game = { mode: 'online', me, code, creator: me, version: 0, st: st0, staged: { W: {}, E: {} }, done: { W: false, E: false }, history: [], last: null, sub: {} };
+    game = { id: newId(), name: (name || '').trim() || 'Partie ' + code, mode: 'online', me, code, creator: me, version: 0, st: st0, staged: { W: {}, E: {} }, done: { W: false, E: false }, history: [], last: null, sub: {} };
     await rpc('dip_create', { p_code: code, p_game: pubGame() });
     resetSel(); recomputeDone(); save(); render();
   }
-  async function joinOnline(code, camp) {
+  async function joinOnline(code, camp, name) {
     code = code.trim().toUpperCase();
+    const known = Object.values(readStore()).find(g => g.mode === 'online' && g.code === code && (!camp || g.me === camp));
+    if (known) { openGame(known.id); return; }
     const rows = await rpc('dip_get', { p_code: code });
     if (!rows || !rows.length) throw new Error('Partie introuvable');
     const row = rows[0], creator = row.game.creator;
-    game = { mode: 'online', me: camp || OTHER(creator), code, creator, version: -1, st: row.game.st, staged: { W: {}, E: {} }, done: { W: false, E: false }, history: [], last: null, sub: {} };
+    game = { id: newId(), name: (name || '').trim() || 'Partie ' + code, mode: 'online', me: camp || OTHER(creator), code, creator, version: -1, st: row.game.st, staged: { W: {}, E: {} }, done: { W: false, E: false }, history: [], last: null, sub: {} };
     adopt(row); game.sub = row.submitted || {}; recomputeDone(); save(); render();
   }
   let resolving = false, polling = false, pollStart = 0;
@@ -124,8 +141,10 @@
     if (!game || game.mode !== 'online') return;
     if ((polling || resolving) && Date.now() - pollStart < 20000) return;
     polling = true; resolving = false; pollStart = Date.now();
+    const g0 = game;
     try {
       const rows = await rpc('dip_get', { p_code: game.code });
+      if (game !== g0) return;                       // on a changé de partie pendant la requête
       if (!rows || !rows.length) { game.net = 'Partie introuvable.'; render(); return; }
       const row = rows[0]; let changed = !!game.net; game.net = null; lastSync = Date.now();
       if (row.version !== game.version) { adopt(row); changed = true; }
@@ -151,12 +170,13 @@
   window.addEventListener('focus', () => pull());
   window.addEventListener('online', () => pull());
   async function submitOnline() {
-    const me = game.me, v = game.version; game.notice = null;
+    const g0 = game, me = game.me, v = game.version; game.notice = null;
     game.sub = Object.assign({}, game.sub, { [me]: { k: phaseKey(), o: game.staged[me] } });
     recomputeDone(); render();
     let ok = false;
     try { ok = await rpc('dip_submit', { p_code: game.code, p_player: me, p_key: phaseKey(), p_version: v, p_orders: game.staged[me] }); }
     catch (e) { game.net = 'Envoi impossible, réessayez.'; }
+    if (game !== g0) { try { const s = readStore(); if (s[g0.id]) { s[g0.id] = g0; localStorage.setItem(STORE_KEY, JSON.stringify(s)); } } catch (e) { /* ignore */ } return; }
     if (!ok) {
       delete game.sub[me]; recomputeDone();
       if (!game.net) game.net = 'La situation a changé pendant que vous jouiez : vos ordres n\'ont pas été envoyés. Vérifiez la carte, puis validez de nouveau.';
@@ -249,6 +269,7 @@
   function applyView() { svg.setAttribute('viewBox', `${view.x} ${view.y} ${view.w} ${view.h}`); }
   function fitView() {
     const r = svg.getBoundingClientRect(), a = r.width / Math.max(r.height, 1), mapA = MAP.W / MAP.H;
+    if (!(r.width > 0 && r.height > 0)) return;     // panneau pas encore dimensionné
     if (a > mapA) { view.h = MAP.H; view.w = MAP.H * a; view.x = (MAP.W - view.w) / 2; view.y = 0; }
     else { view.w = MAP.W; view.h = MAP.W / a; view.x = 0; view.y = (MAP.H - view.h) / 2; }
     applyView();
@@ -545,7 +566,8 @@
   }
 
   function render() {
-    if (!game) { renderSetup(); return; }
+    if (!game) { $('#gname').textContent = ''; renderSetup(); return; }
+    $('#gname').textContent = '✎ ' + (game.name || 'Partie'); $('#gname').title = 'Renommer cette partie';
     const s = st(), cur = activePlayer();
     $('#phase').innerHTML = '<b>' + Dip.phaseLabel(s) + '</b>' + (cur ? (game.mode === 'online' ? ' · vous êtes <b style="color:' + P[cur].color + '">' + P[cur].name + '</b>' : ' · à <b style="color:' + P[cur].color + '">' + P[cur].name + '</b> de jouer') : '');
     drawDynamic();
@@ -698,28 +720,98 @@
   // ------------------------------------------------------------------ écrans modaux
   function modal(html) { const m = $('#modal'); m.innerHTML = '<div class="box">' + html + '</div>'; m.classList.remove('hidden'); return m; }
   function closeModal() { $('#modal').classList.add('hidden'); }
+  function openGame(id) {
+    const g = readStore()[id]; if (!g) return;
+    save();                                         // garde l'état de la partie quittée
+    game = g; polling = false; resolving = false; ui.cur = null; ui.curtainOk = null; resetSel();
+    try { localStorage.setItem(CUR_KEY, id); } catch (e) { /* ignore */ }
+    closeModal(); render(); pull();
+  }
+  function renameGame(id) {
+    const s = readStore(), g = s[id]; if (!g) return;
+    const n = prompt('Nom de la partie :', g.name || ''); if (n === null) return;
+    g.name = n.trim() || g.name; if (game && game.id === id) game.name = g.name;
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(s)); } catch (e) { /* ignore */ }
+    if (game) render();
+    if (!$('#modal').classList.contains('hidden') && $('#glist')) showGames();
+  }
+  function deleteGame(id) {
+    const s = readStore(), g = s[id]; if (!g) return;
+    if (!confirm('Retirer « ' + (g.name || 'cette partie') + ' » de la liste ?' + (g.mode === 'online' ? '\n(Elle reste sur le serveur : vous pourrez la rejoindre avec le code ' + g.code + '.)' : '\nCette partie sur le même écran sera perdue.'))) return;
+    delete s[id];
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(s)); } catch (e) { /* ignore */ }
+    if (game && game.id === id) { game = null; try { localStorage.removeItem(CUR_KEY); } catch (e) { /* ignore */ } const rest = Object.values(s); if (rest.length) { openGame(rest.sort((a, b) => (b.updated || 0) - (a.updated || 0))[0].id); return; } render(); return; }
+    showGames();
+  }
+  function statusOf(g, row) {
+    // texte d'état d'une partie ; row = ligne serveur (parties en ligne) si on l'a
+    if (g.mode !== 'online') return { t: Dip.phaseLabel(g.st), c: '' };
+    if (!row) return { t: Dip.phaseLabel(g.st), c: '' };
+    const s = row.game.st;
+    if (s.phase === 'over') return { t: 'Terminée', c: '' };
+    const lbl = Dip.phaseLabel(s), key = s.year + s.season + s.phase, sub = row.submitted || {};
+    if (!needsInput(g.me, s)) return { t: lbl + ' · en attente de l\'adversaire', c: '' };
+    if (sub[g.me] && sub[g.me].k === key) return { t: lbl + ' · ordres envoyés, en attente de l\'adversaire', c: '' };
+    return { t: lbl + ' · à vous de jouer !', c: 'ok' };
+  }
+  async function showGames() {
+    const store = readStore(), list = Object.values(store).sort((a, b) => (b.updated || 0) - (a.updated || 0));
+    const m = modal(`<h2>Mes parties</h2>
+      ${list.length ? '<div id="glist" style="display:flex;flex-direction:column;gap:8px"></div>' : '<p class="hint">Aucune partie pour l\'instant.</p>'}
+      <div class="row" style="margin-top:14px"><button class="primary" id="g-new">＋ Créer une nouvelle partie</button><button class="ghost" id="g-close">Fermer</button></div>`);
+    const box = m.querySelector('#glist');
+    const rows = {};
+    function draw() {
+      if (!box) return;
+      box.innerHTML = list.map(g => {
+        const st0 = statusOf(g, rows[g.id]), cur = game && game.id === g.id;
+        const camp = g.me ? ` · <span style="color:${P[g.me].color}">${P[g.me].name}</span>` : '';
+        return `<div class="card" style="${cur ? 'border-color:var(--gold)' : ''}">
+          <div class="row" style="justify-content:space-between"><b>${esc(g.name || 'Partie')}</b><span class="hint">${g.mode === 'online' ? 'En ligne · ' + esc(g.code) : 'Même écran'}${camp}</span></div>
+          <div class="hint ${st0.c}" style="margin:4px 0 8px">${esc(st0.t)}${cur ? ' — partie affichée' : ''}</div>
+          <div class="row"><button class="primary" data-open="${g.id}">${cur ? 'Continuer' : 'Ouvrir'}</button><button class="ghost" data-ren="${g.id}">Renommer</button><button class="ghost" data-del="${g.id}">Retirer</button></div></div>`;
+      }).join('');
+      box.querySelectorAll('[data-open]').forEach(b => b.onclick = () => openGame(b.dataset.open));
+      box.querySelectorAll('[data-ren]').forEach(b => b.onclick = () => renameGame(b.dataset.ren));
+      box.querySelectorAll('[data-del]').forEach(b => b.onclick = () => deleteGame(b.dataset.del));
+    }
+    draw();
+    m.querySelector('#g-new').onclick = () => renderSetup();
+    m.querySelector('#g-close').onclick = () => { closeModal(); if (!game) renderSetup(); };
+    // met à jour l'état des parties en ligne (à qui de jouer)
+    await Promise.all(list.filter(g => g.mode === 'online').map(async g => {
+      try { const r = await rpc('dip_get', { p_code: g.code }); if (r && r[0]) rows[g.id] = r[0]; } catch (e) { /* ignore */ }
+    }));
+    if (box && document.body.contains(box)) draw();
+  }
   function renderSetup(errMsg) {
     drawDynamicSafe();
-    $('#panel').innerHTML = '<div class="card"><h3>Nouvelle partie</h3><p class="hint">Choisissez un mode de jeu.</p></div>';
-    const m = modal(`<h2>Diplomacy — Guerre froide</h2>
+    if (!game) $('#panel').innerHTML = '<div class="card"><h3>Nouvelle partie</h3><p class="hint">Choisissez un mode de jeu.</p></div>';
+    const hasGames = Object.keys(readStore()).length > 0;
+    const inp = 'padding:8px;border-radius:8px;border:1px solid var(--line);background:#0b1424;color:var(--text)';
+    const m = modal(`<h2>Nouvelle partie</h2>
       <p>Deux blocs, une carte du monde vue du pôle Nord. Contrôlez la majorité des centres de ravitaillement pour l'emporter.</p>
+      <h4>Nom de la partie</h4><div class="row"><input id="gname-in" placeholder="Ex. Partie avec Théo" maxlength="40" style="flex:1;${inp}"></div>
       <div class="choice">
         <button id="m-online"><b>En ligne</b><small>Chacun sur son appareil, synchronisé automatiquement. Vous créez la partie et envoyez un lien à votre ami.</small></button>
         <button id="m-local"><b>Même écran</b><small>Vous jouez à deux sur cet appareil. Les ordres sont cachés derrière un écran de passage.</small></button>
       </div>
       <div id="side" class="hidden"><h4>Créer une partie : votre camp</h4><div class="row"><button class="W" id="s-W">Ouest — ${P.W.long}</button><button class="E" id="s-E">Est — ${P.E.long}</button></div>
       <p class="hint">Votre ami rejoindra avec l'autre camp grâce au lien.</p>
-      <h4>…ou rejoindre une partie</h4><div class="row"><input id="joincode" placeholder="Code (ex. K7M2P)" maxlength="8" style="padding:8px;border-radius:8px;border:1px solid var(--line);background:#0b1424;color:var(--text);text-transform:uppercase"><button id="join">Rejoindre</button></div></div>
+      <h4>…ou rejoindre une partie</h4><div class="row"><input id="joincode" placeholder="Code (ex. K7M2P)" maxlength="8" style="${inp};text-transform:uppercase"><button id="join">Rejoindre</button></div></div>
       <div id="err" class="bad hint" style="margin-top:8px">${errMsg ? esc(errMsg) : ''}</div>
-      <div class="row" style="margin-top:14px"><button class="ghost" id="m-rules">Lire les règles</button>${load() ? '<button class="ghost" id="m-resume">Reprendre la partie sauvegardée</button>' : ''}</div>`);
+      <div class="row" style="margin-top:14px"><button class="ghost" id="m-rules">Lire les règles</button>${hasGames ? '<button class="ghost" id="m-games">Mes parties</button>' : ''}${game ? '<button class="ghost" id="m-cancel">Annuler</button>' : ''}</div>`);
+    const nm = () => m.querySelector('#gname-in').value;
     const fail = e => { m.querySelector('#err').textContent = 'Erreur : ' + (e.message || e); };
-    m.querySelector('#m-local').onclick = () => { closeModal(); newGame('local'); };
+    m.querySelector('#m-local').onclick = () => { closeModal(); save(); newGame('local', null, nm()); };
     m.querySelector('#m-online').onclick = () => m.querySelector('#side').classList.remove('hidden');
-    m.querySelector('#s-W').onclick = () => createOnline('W').then(closeModal).catch(fail);
-    m.querySelector('#s-E').onclick = () => createOnline('E').then(closeModal).catch(fail);
-    m.querySelector('#join').onclick = () => joinOnline(m.querySelector('#joincode').value).then(closeModal).catch(fail);
+    const go = camp => { save(); const prev = game; createOnline(camp, nm()).then(closeModal).catch(e => { game = prev; fail(e); }); };
+    m.querySelector('#s-W').onclick = () => go('W');
+    m.querySelector('#s-E').onclick = () => go('E');
+    m.querySelector('#join').onclick = () => { const prev = game; save(); joinOnline(m.querySelector('#joincode').value, null, nm()).then(closeModal).catch(e => { game = prev; fail(e); }); };
     m.querySelector('#m-rules').onclick = showRules;
-    const rs = m.querySelector('#m-resume'); if (rs) rs.onclick = () => { game = load(); closeModal(); render(); pull(); };
+    const mg = m.querySelector('#m-games'); if (mg) mg.onclick = showGames;
+    const mc = m.querySelector('#m-cancel'); if (mc) mc.onclick = closeModal;
   }
   function drawDynamicSafe() { try { gDyn.innerHTML = ''; } catch (e) { /* */ } }
   function showRules() {
@@ -741,13 +833,15 @@
     buildStatic(); setupPanZoom();
     requestAnimationFrame(fitView);
     $('#btn-rules').onclick = showRules;
-    $('#btn-new').onclick = () => { if (!game || confirm('Abandonner la partie en cours ?')) { game = null; render(); } };
+    $('#btn-games').onclick = showGames;
+    $('#btn-new').onclick = () => renderSetup();
+    $('#gname').onclick = () => { if (game) renameGame(game.id); };
     const saved = load();
     const qs = new URLSearchParams(location.search), wanted = (qs.get('partie') || '').toUpperCase(), camp = qs.get('camp');
     if (saved && saved.st) { game = saved; ui.cur = null; }
     if (wanted && !(game && game.mode === 'online' && game.code === wanted)) {
       game = null; renderSetup();
-      joinOnline(wanted, camp === 'W' || camp === 'E' ? camp : null).then(closeModal).catch(e => renderSetup('Impossible de rejoindre ' + wanted + ' : ' + (e.message || e)));
+      joinOnline(wanted, camp === 'W' || camp === 'E' ? camp : null).then(closeModal).catch(e => { game = load(); renderSetup('Impossible de rejoindre ' + wanted + ' : ' + (e.message || e)); });
     } else if (game) { render(); pull(); } else renderSetup();
     window.__dip = { get game() { return game; }, MAP, G, ui };
   }
