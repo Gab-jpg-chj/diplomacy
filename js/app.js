@@ -9,6 +9,7 @@
   const $ = s => document.querySelector(s);
   const P = PLAYERS;
   const OTHER = p => (p === 'W' ? 'E' : 'W');
+  const COAST_NAMES = { co: 'côte ouest', ce: 'côte est', cn: 'côte nord', cs: 'côte sud' };
 
   let game = null;                      // partie en cours (sauvegardée)
   const ui = { cur: null, curtainOk: null, sel: null, act: null, step: 0, pick: null, coastAsk: null, showLast: true, buildPick: null, retSel: null, zoomed: false };
@@ -328,8 +329,9 @@
     // comptoirs
     MAP.regions.forEach(r => { if (r.coasts) Object.entries(r.coasts).forEach(([n, c]) => {
       const t = el('g', { transform: `translate(${c.x} ${c.y})` }, gDyn);
-      el('polygon', { points: '0,-9 8,-4.5 8,4.5 0,9 -8,4.5 -8,-4.5', fill: '#f0b24a', stroke: '#06101c', 'stroke-width': 2 }, t);
-      const tt = el('text', { y: 20, class: 'lbl', 'font-size': 10 }, t); tt.textContent = n;
+      el('polygon', { points: '0,-17 15,-8.5 15,8.5 0,17 -15,8.5 -15,-8.5', fill: '#f0b24a', stroke: '#fff', 'stroke-width': 3 }, t);
+      const ic = el('text', { y: 7, 'font-size': 20, 'text-anchor': 'middle', fill: '#1b1405' }, t); ic.textContent = '⚓';
+      const tt = el('text', { y: 34, class: 'lbl', 'font-size': 14, fill: '#ffd98a' }, t); tt.textContent = r.id + ' ' + COAST_NAMES[n];
     }); });
     // flèches des ordres
     const arrows = el('g', {}, gDyn);
@@ -462,8 +464,15 @@
     }
     if (game.mode === 'remote' && game.done[cur]) h += remoteHTML(cur);
     else if (cur) h += phaseHTML(cur);
-    h += lastResultsHTML() + historyHTML();
+    h += lastResultsHTML() + historyHTML() + legendHTML();
     panel.innerHTML = h; bindPanel();
+  }
+  function legendHTML() {
+    const list = []; MAP.regions.forEach(r => { if (r.coasts) list.push(r.id + ' (' + Object.keys(r.coasts).map(c => COAST_NAMES[c].replace('côte ', '')).join('/') + ')'); });
+    return `<div class="card"><h3>Légende</h3><div class="hint" style="line-height:1.8">
+      <span style="color:#f0b24a;font-size:18px">⬢⚓</span> <b>Comptoir</b> : une côte d'une province qui en a plusieurs. Une flotte s'y poste sur <i>cette</i> côte et ne rejoint que les mers voisines de celle-ci.<br>
+      <span style="font-size:16px">★</span> Centre de ravitaillement (anneau plein = déjà possédé, pointillé = neutre ; anneau fin = centre d'origine).<br>
+      Provinces à comptoirs : ${list.join(', ')}.</div></div>`;
   }
 
   function lastResultsHTML() {
