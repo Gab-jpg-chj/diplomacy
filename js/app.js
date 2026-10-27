@@ -141,6 +141,9 @@
     finally { polling = false; }
   }
   setInterval(pull, 3000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) pull(); });
+  window.addEventListener('focus', () => pull());
+  window.addEventListener('online', () => pull());
   async function submitOnline() {
     const me = game.me, v = game.version; game.notice = null;
     game.sub = Object.assign({}, game.sub, { [me]: { k: phaseKey(), o: game.staged[me] } });
