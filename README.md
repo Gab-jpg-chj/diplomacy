@@ -4,13 +4,16 @@ Jeu de Diplomacy à deux joueurs (Ouest contre Est) sur une carte du monde vue d
 Site statique, aucune installation : ouvrez `index.html` (ou servez le dossier, par ex. `python3 -m http.server`).
 
 ## Jouer
+- **En ligne** : vous créez une partie, choisissez votre camp et envoyez le lien à votre ami (il prend l'autre camp).
+  Chacun valide ses ordres de son côté ; le tour se résout tout seul dès que les deux ont validé, même si vous
+  n'êtes pas connectés en même temps. La partie est stockée dans Supabase (`supabase/schema.sql`, fonctions `dip_*`).
 - **Même écran** : les deux joueurs partagent l'appareil, un écran de passage cache les ordres.
-- **À distance** : chacun sur son appareil. À chaque phase, vous validez vos ordres, envoyez votre code à l'autre
-  (message, mail…) et collez le sien pour résoudre le tour. Les deux parties doivent être lancées en mode « À distance »
-  avec des camps opposés.
 - Victoire : plus de la moitié des centres de ravitaillement.
 - Règles complètes dans le bouton « Règles » du site : soutiens, coupures, convois (chaînes de flottes),
   échanges, rotations, retraites, ajustements d'hiver. Moteur : `js/engine.js` (algorithme de Kruijswijk).
+
+Limites du mode en ligne : toute personne qui a le lien de la partie peut y jouer, et les ordres déjà validés
+par un joueur sont techniquement lisibles par l'autre via l'API avant qu'il valide les siens.
 
 ## Publier (GitHub Pages)
 Réglages du dépôt → Pages → branche `main`, dossier `/ (root)`.
