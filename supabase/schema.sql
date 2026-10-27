@@ -19,13 +19,17 @@ returns table(game jsonb, submitted jsonb, version int) language sql security de
   select g.game, g.submitted, g.version from public.dip_games g where g.code = upper(p_code);
 $$;
 
-create or replace function public.dip_submit(p_code text, p_player text, p_key text, p_orders jsonb)
-returns void language sql security definer set search_path = public as $$
+create or replace function public.dip_submit(p_code text, p_player text, p_key text, p_version int, p_orders jsonb)
+returns boolean language plpgsql security definer set search_path = public as $$
+declare n int;
+begin
   update public.dip_games
      set submitted = submitted || jsonb_build_object(p_player, jsonb_build_object('k', p_key, 'o', p_orders)),
          updated_at = now()
-   where code = upper(p_code) and p_player in ('W','E');
-$$;
+   where code = upper(p_code) and version = p_version and p_player in ('W','E');
+  get diagnostics n = row_count;
+  return n = 1;
+end $$;
 
 create or replace function public.dip_unsubmit(p_code text, p_player text)
 returns void language sql security definer set search_path = public as $$
@@ -44,5 +48,5 @@ begin
   return n = 1;
 end $$;
 
-revoke all on function public.dip_create(text, jsonb), public.dip_get(text), public.dip_submit(text, text, text, jsonb), public.dip_unsubmit(text, text), public.dip_advance(text, int, jsonb) from public;
-grant execute on function public.dip_create(text, jsonb), public.dip_get(text), public.dip_submit(text, text, text, jsonb), public.dip_unsubmit(text, text), public.dip_advance(text, int, jsonb) to anon;
+revoke all on function public.dip_create(text, jsonb), public.dip_get(text), public.dip_submit(text, text, text, int, jsonb), public.dip_unsubmit(text, text), public.dip_advance(text, int, jsonb) from public;
+grant execute on function public.dip_create(text, jsonb), public.dip_get(text), public.dip_submit(text, text, text, int, jsonb), public.dip_unsubmit(text, text), public.dip_advance(text, int, jsonb) to anon;

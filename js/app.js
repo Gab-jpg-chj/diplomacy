@@ -92,6 +92,7 @@
   const linkFor = code => location.origin + location.pathname + '?partie=' + code;
   function adopt(row) {
     const g = row.game;
+    if (game.version >= 0 && game.version !== row.version && game.me && Object.keys(game.staged[game.me] || {}).length) game.notice = 'La situation a changé (nouveau tour) : vos ordres en cours ont été effacés.';
     game.st = g.st; game.history = g.history || []; game.last = g.last || null; game.creator = g.creator; game.version = row.version;
     game.staged = { W: {}, E: {} }; resetSel();
   }
@@ -141,11 +142,18 @@
   }
   setInterval(pull, 3000);
   async function submitOnline() {
-    const me = game.me;
+    const me = game.me, v = game.version; game.notice = null;
     game.sub = Object.assign({}, game.sub, { [me]: { k: phaseKey(), o: game.staged[me] } });
     recomputeDone(); render();
-    try { await rpc('dip_submit', { p_code: game.code, p_player: me, p_key: phaseKey(), p_orders: game.staged[me] }); } catch (e) { game.net = 'Envoi impossible, réessayez.'; delete game.sub[me]; recomputeDone(); }
-    save(); pull(); render();
+    let ok = false;
+    try { ok = await rpc('dip_submit', { p_code: game.code, p_player: me, p_key: phaseKey(), p_version: v, p_orders: game.staged[me] }); }
+    catch (e) { game.net = 'Envoi impossible, réessayez.'; }
+    if (!ok) {
+      delete game.sub[me]; recomputeDone();
+      if (!game.net) game.net = 'La situation a changé pendant que vous jouiez : vos ordres n\'ont pas été envoyés. Vérifiez la carte, puis validez de nouveau.';
+      polling = false; await pull();
+    }
+    save(); render();
   }
   async function unsubmitOnline() {
     const me = game.me; delete game.sub[me]; recomputeDone(); render();
@@ -620,7 +628,7 @@
     return `<div class="card"><h3>Partie en ligne · code ${game.code}</h3>
       <div class="row"><span class="dot ${game.me}"></span><span>Vous jouez <b style="color:${P[game.me].color}">${P[game.me].long}</b></span></div>
       <div class="row" style="margin-top:8px"><button id="copylink">Copier le lien à envoyer</button></div>
-      <div id="netmsg" class="hint ${game.net ? 'bad' : ''}" style="margin-top:6px">${game.net ? esc(game.net) : 'Synchronisée automatiquement.'}</div></div>`;
+      <div id="netmsg" class="hint ${game.net || game.notice ? 'bad' : ''}" style="margin-top:6px">${game.net ? esc(game.net) : game.notice ? esc(game.notice) : 'Synchronisée : situation n°' + (game.version + 1) + ', identique pour les deux joueurs.'}</div></div>`;
   }
   function waitHTML(cur) {
     const opp = OTHER(cur), s = st();
