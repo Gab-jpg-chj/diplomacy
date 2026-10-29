@@ -238,7 +238,7 @@
       if (!r.path) return;
       const p = el('path', { d: r.path, 'fill-rule': 'evenodd', class: 'reg ' + r.type, 'data-id': r.id }, gStatic);
       p.setAttribute('fill', r.type === 'sea' ? SEA : LAND.t);
-      if (r.type === 'sea') { p.style.strokeWidth = '1.5'; p.style.stroke = '#2b4c7c'; }
+      if (r.type === 'sea') { p.style.strokeWidth = '1'; p.style.stroke = '#2b4c7c'; }
       regionEls[r.id] = p;
     });
     // étiquettes
@@ -254,7 +254,7 @@
     applyView();
   }
   function labelPos(r) {
-    if (r.center) return { x: r.center.x, y: r.center.y + 34 };
+    if (r.center) return { x: r.center.x, y: r.center.y + 24 };
     if (r.coasts) return { x: r.pole.x, y: r.pole.y };
     return { x: r.pole.x, y: r.pole.y };
   }
@@ -327,7 +327,7 @@
   // ------------------------------------------------------------------ dessin dynamique
   function unitIcon(parent, x, y, u, opts) {
     opts = opts || {};
-    const g = el('g', { transform: `translate(${x} ${y})`, opacity: opts.ghost ? .55 : 1 }, parent);
+    const g = el('g', { transform: `translate(${x} ${y}) scale(.62)`, opacity: opts.ghost ? .55 : 1 }, parent);
     el('circle', { r: 17, fill: P[u.owner].color, stroke: opts.dislodged ? '#fff' : '#06101c', 'stroke-width': opts.dislodged ? 4 : 3 }, g);
     if (opts.dislodged) el('circle', { r: 21, fill: 'none', stroke: '#ff4d3a', 'stroke-width': 3, 'stroke-dasharray': '4 3' }, g);
     if (u.type === 'A') {
@@ -440,17 +440,17 @@
     // centres
     G.centers.forEach(id => {
       const r = RG(id), o = s.owners[id], c = r.center;
-      const g = el('g', { transform: `translate(${c.x} ${c.y})` }, gDyn);
+      const g = el('g', { transform: `translate(${c.x} ${c.y}) scale(.62)` }, gDyn);
       el('circle', { r: 24, fill: o ? P[o].color : '#e8e2cf', 'fill-opacity': .28, stroke: o ? P[o].color : '#fff', 'stroke-width': 4, 'stroke-dasharray': o ? '' : '5 4' }, g);
       if (!Dip.unitAt(s, id)) el('path', { d: 'M0 -11 L3.2 -3.5 L11 -3.5 L4.8 1.5 L7 9.5 L0 5 L-7 9.5 L-4.8 1.5 L-11 -3.5 L-3.2 -3.5Z', fill: o ? P[o].color : '#fff', stroke: '#06101c', 'stroke-width': 1.5 }, g);
       if (r.center.home) el('circle', { r: 28, fill: 'none', stroke: P[r.center.home].color, 'stroke-width': 2, opacity: .7 }, g);
     });
     // comptoirs
     MAP.regions.forEach(r => { if (r.coasts) Object.entries(r.coasts).forEach(([n, c]) => {
-      const t = el('g', { transform: `translate(${c.x} ${c.y})` }, gDyn);
+      const t = el('g', { transform: `translate(${c.x} ${c.y}) scale(.5)` }, gDyn);
       el('polygon', { points: '0,-17 15,-8.5 15,8.5 0,17 -15,8.5 -15,-8.5', fill: '#f0b24a', stroke: '#fff', 'stroke-width': 3 }, t);
       const ic = el('text', { y: 7, 'font-size': 20, 'text-anchor': 'middle', fill: '#1b1405' }, t); ic.textContent = '⚓';
-      const tt = el('text', { y: 34, class: 'lbl', 'font-size': 14, fill: '#ffd98a' }, t); tt.textContent = r.id + ' ' + COAST_NAMES[n];
+      const tt = el('text', { y: 36, class: 'lbl', 'font-size': 18, fill: '#ffd98a' }, t); tt.textContent = r.id + ' ' + COAST_NAMES[n];
     }); });
     // flèches des ordres
     const arrows = el('g', {}, gDyn);
@@ -476,7 +476,7 @@
       if (ui.sel === u.id) el('circle', { r: 24, fill: 'none', stroke: '#fff', 'stroke-width': 3 }, g);
       if (disbandMarks.includes(u.id)) el('path', { d: 'M-12 -12L12 12M12 -12L-12 12', stroke: '#ff4d3a', 'stroke-width': 5, 'stroke-linecap': 'round' }, g);
     });
-    s.retreats.forEach(d => { const p = unitPos(d.unit.loc, d.unit.coast); unitIcon(gDyn, p.x + 22, p.y - 22, d.unit, { dislodged: true }); });
+    s.retreats.forEach(d => { const p = unitPos(d.unit.loc, d.unit.coast); unitIcon(gDyn, p.x + 15, p.y - 15, d.unit, { dislodged: true }); });
     // constructions prévues
     if (game && s.phase === 'build' && cur) (game.staged[cur].list || []).filter(x => x.type === 'build').forEach(x => {
       const p = unitPos(x.loc, x.coast); unitIcon(gDyn, p.x, p.y, { type: x.utype, owner: cur }, { ghost: true });

@@ -225,10 +225,10 @@ function buildMap() {
       // supprime les points alignés, puis lisse (Chaikin)
       let q = p.filter((pt, i) => { const a = p[(i + p.length - 1) % p.length], b = p[(i + 1) % p.length]; return !((a[0] === pt[0] && pt[0] === b[0]) || (a[1] === pt[1] && pt[1] === b[1])); });
       if (q.length < 3) return '';
-      for (let it = 0; it < 2; it++) {
+      for (let it = 0; it < 4; it++) {
         const n = []; for (let i = 0; i < q.length; i++) { const a = q[i], b = q[(i + 1) % q.length]; n.push([a[0] * .75 + b[0] * .25, a[1] * .75 + b[1] * .25], [a[0] * .25 + b[0] * .75, a[1] * .25 + b[1] * .75]); } q = n;
       }
-      return 'M' + q.map(pt => (pt[0] * CELL).toFixed(0) + ' ' + (pt[1] * CELL).toFixed(0)).join('L') + 'Z';
+      return 'M' + q.map(pt => (pt[0] * CELL).toFixed(1) + ' ' + (pt[1] * CELL).toFixed(1)).join('L') + 'Z';
     }).join('');
   });
 
